@@ -2,8 +2,11 @@ project:
   type: book
 
 book:
-  title: "MCC_regression"
-  author: "Norah Jones"
+  title: "MCC regression modeling with scpeakeR"
+  subtitle: "Evaluating the dominant factor that drives agreement between CellChat and CellPhoneDB inference results across bioloigcal datasets"
+  repo-url: https://github.com/nigelhojinker/scpeakeR
+
+  author: "Nigel Ho"
   date: "13/03/2026"
   chapters:
     - index.qmd

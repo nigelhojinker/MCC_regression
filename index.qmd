@@ -1,9 +1,5 @@
 # Preface {.unnumbered}
 
-This is a Quarto book.
+CellChat and CellPhoneDB are two popular tools for analyzing cell-cell communication from single-cell RNA-seq data. Both tools contain a built-in prior knowledge of manually-curated HUMAN ligand-receptor interactions to infer potential communication between cell types based on their gene expression profiles.
 
-To learn more about Quarto books visit <https://quarto.org/docs/books>.
-
-```{r}
-1 + 1
-```
+In this book, we will compare the inference results generated from both tools when compared naively. To establish a baseline comparison, we create a mapping table that aligns interactions from both CellChat and CellPhoneDB resources after Database Harmonization Step 1. For more details on the database harmonization process adopted in scpeakeR, please refer to the link [here](https://webpages-nigelhojinkers-projects.vercel.app/).
