@@ -1,0 +1,25 @@
+project:
+  type: book
+
+book:
+  title: "MCC_regression"
+  author: "Norah Jones"
+  date: "13/03/2026"
+  chapters:
+    - index.qmd
+    - intro.qmd
+    - summary.qmd
+    - references.qmd
+
+bibliography: references.bib
+
+format:
+  html:
+    theme:
+      - cosmo
+      - brand
+  pdf:
+    documentclass: scrreprt
+
+editor: visual
+
