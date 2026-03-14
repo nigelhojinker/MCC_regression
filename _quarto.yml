@@ -11,7 +11,7 @@ book:
   chapters:
     - index.qmd
     - NL.qmd
-    - summary.qmd
+    - LS.qmd
     - references.qmd
 
 bibliography: references.bib
