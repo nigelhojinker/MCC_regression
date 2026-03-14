@@ -10,7 +10,7 @@ book:
   date: "3/13/2026"
   chapters:
     - index.qmd
-    - intro.qmd
+    - NL.qmd
     - summary.qmd
     - references.qmd
 

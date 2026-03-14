@@ -3,7 +3,7 @@ output: html_document
 editor_options: 
   chunk_output_type: console
 ---
-# Introduction
+# Atopic Dermatitis (Non-lesional skin) Case Study 
 
 In this chapter, we evaluate the contributors of agreement between CellChat and CellPhoneDB inference results, using the publicly available scRNA-seq dataset of human atopic dermatitis skin samples from the study by [He et. al (2020)](https://www.jacionline.org/article/S0091-6749(20)30182-2/fulltext). The processed dataset provided by the developers of CellChat can be downloaded via Figshare [here](https://doi.org/10.6084/m9.figshare.13520015). We downloaded the dataset and performed further processing, and subset the data into the non-lesional and lesional skin samples, which we saved as `seu.NL` and `seu.LS` respectively. The code for processing the data is available in our GitHub repository [here](https://github.com/nigelhojinker/scpeakeR/blob/main/data-raw/demo_data.md).
 
