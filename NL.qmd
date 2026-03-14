@@ -147,7 +147,15 @@ broom::tidy(fit) %>% knitr::kable()
 # Discussion
 
 The fitted regression model was:
-$MCC =0.7769 -0.0762*I(Method) - 0.1148*I(Mean\_Type) - 0.4922*I(Database)$
+
+$$
+\begin{aligned}
+MCC =\;& 0.7769\, \\ 
+      & - 0.0762\, I(\text{Method}) \\
+      & - 0.1148\,   I(\text{Mean\_Type}) \\
+      & - 0.4922\,   I(\text{Database})
+\end{aligned}
+$$
 
 where $I = 0$ indicates that the factor was the same between the analyses, and $I = 1$ indicates that the factor differed.
 

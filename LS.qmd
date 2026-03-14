@@ -146,13 +146,63 @@ broom::tidy(fit) %>% knitr::kable()
 # Discussion
 
 The fitted regression model was:
-$MCC = 0.8476 + 0.009416*I(Method) - 0.1600*I(Mean\_Type) - 0.5260*I(Database)$
+
+$$
+\begin{aligned}
+MCC   =\;& 0.8476\, \\
+      & + 0.009416\, I(\text{Method}) \\
+      & - 0.1600\,   I(\text{Mean\_Type}) \\
+      & - 0.5260\,   I(\text{Database})
+\end{aligned}
+$$
 
 where $I = 0$ indicates that the factor was the same between the analyses, and $I = 1$ indicates that the factor differed.
 
-The overall regression was statistically significant, explaining a substantial proportion of the variance in the computed MCC values (R-squared = 0.787). Under the reference condition, where method, mean type and database were identical, the expected MCC was 0.7769. Holding the other factors constant, MCC increased by 0.009416 when the method differed, by 0.1600 when the mean type differed, and by 0.5260 when the database differed. With the exception of the method employed, all predictors displayed a significant decrease (p < 0.05) in the MCC value when the variable differed, with database choice exerting the largest effect, followed by mean type and method. 
+The overall regression was statistically significant, explaining a substantial proportion of the variance in the computed MCC values (R-squared = 0.787). Under the reference condition, where method, mean type and database were identical, the expected MCC was 0.8476 Holding the other factors constant, MCC increased by 0.009416 when the method differed, by 0.1600 when the mean type differed, and by 0.5260 when the database differed. With the exception of the method employed, all predictors displayed a significant decrease (p < 0.05) in the MCC value when the variable differed, with database choice exerting the largest effect, followed by mean type and method. 
 
 These results indicate that across CCC analyses performed using CellChat and CellPhoneDB, most of the variability in agreement is attributed to database choice. In contrast, changes in inference method or mean type used to compute average gene expression per cell type cluster contributed comparatively smaller shifts in MCC when the database used is held constant. This is consistent with the findings in the previous section, where database choice was the primary factor driving agreement between CellChat and CellPhoneDB.
 
-Noteworthy, we observed a distinctive pattern of MCC computed across the same pairwise comparisons where t25 and triMean averaging strategies had tighter MCC values compared to those in the non-lesional skin data, revealing that the dataset used for the analysis can also influence the agreement between CellChat and CellPhoneDB. In `seu.LS`, t25 and triMean yielded more comparable inference results as oppose to t10, which we do not find to be true using `seu.NL`. We hypothesized that in the lesional skin dataset, the ligand and receptor genes that are differentially expressed across cell types may be more consistently captured in the databases, leading to higher agreement between the tools. In contrast, in the non-lesional skin dataset, the ligand and receptor genes may be less differentially expressed, leading to greater shifts in the inferred results when the tested arguments were different. To test this hypothesis, we continue to perform the same analysis with the disease heart dataset in the next section.
+Noteworthy, we observed a distinctive pattern of MCC computed across the same pairwise comparisons where t25 and triMean averaging strategies had tighter MCC values compared to those in the non-lesional skin data, revealing that the dataset used for the analysis can also influence the agreement between CellChat and CellPhoneDB. In `seu.LS`, t25 and triMean yielded more comparable inference results as oppose to t10, which we do not find to be true using `seu.NL`. We hypothesized that in the lesional skin dataset, the ligand and receptor genes that are differentially expressed across cell types may be more consistently captured in the databases, leading to higher agreement between the tools. In contrast, in the non-lesional skin dataset, the ligand and receptor genes may be less differentially expressed, leading to greater shifts in the inferred results when the tested arguments were different. To test this hypothesis, we continue to perform the same analysis, this time splitting the mean type predictor as follows:
 
+```{r}
+regression_data$Mean_Type <- as.character(regression_data$Mean_Type)
+
+w <- which(regression_data$Mean_Type == "Diff")
+
+regression_data$Mean_Type[w] <- data.frame(regression_data$mean1[w], regression_data$mean2[w]) %>% 
+  apply(., 1, function(x) paste(sort(x), collapse = "_vs_")) 
+
+regression_data$Mean_Type <- factor(regression_data$Mean_Type, 
+                          levels = c("Same", "t25_vs_triMean", "t10_vs_triMean", "t10_vs_t25"))
+
+regression_data$Mean_Type %>% 
+  tabyl() %>% 
+  knitr::kable()
+```
+
+## Fit linear model with split mean type predictor
+
+```{r}
+fit <- lm(mcc ~ Method + Mean_Type + Database, data = regression_data)
+
+summary(fit)
+
+broom::tidy(fit) %>% knitr::kable()
+```
+
+The newly fitted regression model was:
+
+$$
+\begin{aligned}
+MCC =\;& 0.8476\, \\ 
+      & + 0.009416\, I(\text{Method}) \\
+      & + 0.02702\,  I(\text{Mean\_Type}(t25\_vs\_triMean)) \\
+      & - 0.2560\,   I(\text{Mean\_Type}(t10\_vs\_triMean)) \\
+      & - 0.2560\,   I(\text{Mean\_Type}(t10\_vs\_t25)) \\
+      & - 0.5260\,   I(\text{Database})
+\end{aligned}
+$$
+
+where $I = 0$ indicates that the factor was the same between the analyses, and $I = 1$ indicates that the factor differed.
+
+The overall regression of the newly fitted model explains a larger proportion of the variance in the computed MCC values (R-squared = 0.9331). Holding the other factors constant, MCC increased by 0.02702 when the mean type differed between t25 and triMean, while it decreased by 0.2560 when the mean type differed between t10 and triMean, and by 0.2560 when the mean type differed between t10 and t25. This reinforced that the agreement between CellChat and CellPhoneDB is more similar when using t25 and triMean as opposed to t10, which is consistent with our previous observation of a distinctive pattern of MCC computed across the same pairwise comparisons in `seu.LS` as oppose to `seu.NL`.
