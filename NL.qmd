@@ -33,6 +33,26 @@ source("R/deploy.R")
 sapply("results", dir.create, recursive = TRUE)
 ```
 
+## seu.NL data summary
+
+`seu.NL` is a Seurat object containing 10,353 genes across 2,233 cells. 
+
+```{r}
+seu.NL
+```
+
+### seu.NL metadata
+
+```{r}
+seu.NL@meta.data %>% head()
+```
+
+### seu.NL cell type clusters
+
+```{r}
+seu.NL@meta.data %>% tabyl(labels)
+```
+
 # Conduct CellChat and CellPhoneDB analysis across all configurations
 
 ## Create table of all configurations to test
