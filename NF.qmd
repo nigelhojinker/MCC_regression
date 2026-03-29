@@ -1,0 +1,331 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+# Cardiomyopathy (Non-failing heart) Case Study 
+
+In this chapter, we aim to expand the analysis conducted in the previous chapters by evaluating the agreement between CellChat and CellPhoneDB using a different dataset. We downloaded publicly available snRNA-seq data of cardiomyopathy left ventricular samples from the study by [Chaffin et. al (2022)](https://doi.org/10.1038/s41586-022-04817-8). We converted the data into a Seurat object and performed the same analysis as in the previous chapters.
+
+## Load Data and Packages
+
+```{r}
+pacman::p_load(scpeakeR, ggthemes, randomcoloR, ComplexHeatmap, circlize)
+setwd(this.path::here())
+
+use_condaenv("scpeaker")
+
+data(step1_map, CellChatDB.human)
+load("data/CellPhoneDB_ori_human.rda")    # CellChat-compatible CellPhoneDB resource in .rda format
+
+myColors <- distinctColorPalette(80)
+```
+
+## Load required functions
+
+```{r}
+source("R/deploy.R")
+```
+
+## Create result directory if it doesn't exist
+```{r, eval = FALSE}
+sapply("results/seu_NF", dir.create, recursive = TRUE)
+```
+
+## Data download and conversion to Seurat object
+
+The original data was downloaded from Single Cell Portal and can be found [here](https://singlecell.broadinstitute.org/single_cell/study/SCP1303/single-nuclei-profiling-of-human-dilated-and-hypertrophic-cardiomyopathy#study-download). 
+
+### Create Seurat object
+
+We downloaded only the normalized data and not raw counts, since CellChat and CellPhoneDB operates on normalized gene expression data. The object's meta data and UMAP coordinates were also downloaded and added to the Seurat object. We then subsetted the data into `seu.HCM` and `seu.NF` for subsequent analysis.
+
+```{r, eval = FALSE}
+data <- ReadMtx(mtx   = "C://Users/Admin/Downloads/DCM_HCM_Expression_Matrix_V1.mtx",
+                cells = "C://Users/Admin/Downloads/DCM_HCM_Expression_Matrix_barcodes_norm_V1.tsv",
+                features = "C://Users/Admin/Downloads/DCM_HCM_Expression_Matrix_genes_norm_V1.tsv")
+
+meta <- read_delim("C://Users/Admin/Downloads/DCM_HCM_MetaData_V1.txt") %>% 
+  as.data.frame() %>% 
+  filter(NAME != "TYPE")     # remove non-barcode row
+
+harmony <- read_delim("C://Users/Admin/Downloads/DCM_HCM_UMAP_V1.txt") %>% 
+  as.data.frame() %>% 
+  filter(NAME != "TYPE") %>% # remove non-barcode row
+  select(umapharmony_1 = X, umapharmony_2 = Y) 
+
+rownames(meta)    <- colnames(data)
+rownames(harmony) <- colnames(data)
+
+seu.CM <- CreateSeuratObject(counts    = data, 
+                             meta.data = meta)
+
+rm(data,meta)
+
+seu.CM[["RNA"]]$data   <- seu.CM[["RNA"]]$counts
+seu.CM[["RNA"]]$counts <- NULL
+
+mat <- apply(as.matrix(harmony), 2, as.numeric) # convert to numeric matrix
+rownames(mat) <- rownames(harmony)
+
+seu.CM[["umap.harmony"]] <- CreateDimReducObject(embeddings = mat, key = "umapharmony_", assay = DefaultAssay(seu.CM))
+
+rm(mat, harmony)
+```
+
+### Object meta data cleaning
+
+```{r, echo = FALSE}
+load("data/seuCM_final.rda")
+
+seu.CM <- CreateSeuratObject(counts    = seuCM$data, 
+                             meta.data = seuCM$meta)
+```
+
+`seu.CM` contains 36,601 genes across 592,689 cells.
+
+```{r}
+seu.CM
+```
+
+```{r}
+seu.CM@meta.data %>% head()
+```
+
+```{r, echo = FALSE}
+rm(seu.CM)
+
+load("data/20260326_seuCM.rda")
+```
+
+```{r, eval = FALSE}
+seu.CM$cell_type_leiden0.6 <- gsub(".*\\.", "", seu.CM$cell_type_leiden06)
+seu.CM$cell_type_leiden06  <- NULL # remove old annotation
+
+seu.CM@meta.data <- seu.CM@meta.data %>% 
+  mutate(disease = case_when(
+    disease == "MONDO_0005021" ~ "DCM",
+    disease == "MONDO_0005045" ~ "HCM",
+    .default = "NF"
+  ))
+
+```
+
+### Visualize UMAP with these metadata variables
+
+```{r, eval = FALSE}
+vars <- c("donor_id", "disease", "cell_type_leiden0.6", "sex", "sub_cluster")
+
+DimPlot(seu.CM, group.by = vars, label = TRUE, repel = TRUE, reduction = "umap.harmony", ncol = 3, cols = myColors)
+```
+
+![UMAP plots of `seu.CM` colored by metadata variabbles](figures/20260326-seurat_cm_umaps.png){.lightbox}
+
+### Save `seu.CM` object
+
+```{r, eval = FALSE}
+save(seu.CM, file = "data/20260326_seuCM.rda")
+```
+
+### Subset data by conditions: Hypertrophic cardiomyopathy (HCM) and Non-failing heart (NF)
+
+```{r, eval = FALSE}
+seu.NF  <- subset(seu.CM, disease == "NF")
+save(seu.NF, file = "data/20260326_seuNF.rda")
+
+seu.HCM <- subset(seu.CM, disease == "HCM")
+save(seu.HCM, file = "data/20260326_seuHCM.rda")
+```
+
+## seu.NF data summary
+
+`seu.NF` is a Seurat object containing 36,601 genes across 185,441  cells. 
+
+```{r, echo = FALSE}
+load("data/20260326_seuNF.rda")
+```
+
+```{r}
+seu.NF
+```
+
+### seu.NF metadata
+
+```{r}
+seu.NF@meta.data %>% head()
+```
+
+### seu.NF cell type clusters
+
+```{r}
+seu.NF@meta.data %>% tabyl(cell_type_leiden0.6)
+```
+
+# Conduct CellChat and CellPhoneDB analysis across all configurations
+
+## Create table of all configurations to test
+
+```{r}
+grid <- expand.grid(method   = c("cellphonedb", "cellchat"),
+                    mean     = c("t10", "t25", "triMean"),
+                    database = c("CPDB", "CCDB"))
+
+grid %>% knitr::kable()
+```
+
+## Parse mean type and threshold from grid
+
+```{r}
+parse_mean <- function(x){
+  if (x == "t10") {
+    list(type = "thresholdedMean", threshold = 0.1)
+  } else if (x == "t25"){
+    list(type = "thresholdedMean", threshold = 0.25)
+  } else if (x == "triMean"){
+    list(type = "triMean", threshold = 0)
+  }
+}
+```
+
+## Run analysis across all configurations
+
+Due to the large size of the dataset compared to the atopic dermatitis data used in the previous chapters, we will run the analysis across all configurations in parallel on a high-performance computing cluster. The code chunk below is an example of how to run the analysis for each configuration sequentially, but in practice, we would submit each configuration as a separate job to the cluster to speed up the analysis.
+
+```{r, eval = FALSE}
+# Run analysis across all configurations
+for (i in seq_len(nrow(grid))){
+  row      <- grid[i, ]
+  parsed   <- parse_mean(row["mean"])
+  
+  cat("Running analysis with method:", row$method, "\n",
+      "mean:", parsed$type, "\n",
+      "threshold:", parsed$threshold, "\n",
+      "database:", row$database, "\n")
+  
+  # Create output file
+  name    <- paste(c(row$method, row$mean, row$database), collapse = "_")
+  outfile <- file.path(outdir, paste0(name, ".rda"))
+  
+  if (row$method == "cellchat") {
+    res <- run_cellchatv2(seu.NF, 
+                   labels = "cell_type_leiden0.6", 
+                   mean = parsed$type, 
+                   database = row$database, 
+                   threshold = parsed$threshold)
+  } else if(row$method == "cellphonedb") {
+    res <- run_cellphonedbv2(seu.NF, 
+                      labels = "cell_type_leiden0.6", 
+                      mean = parsed$type, 
+                      database = row$database, 
+                      threshold = parsed$threshold)
+  }
+  
+  save(res, file = outfile)
+  
+  rm(res)
+  
+  cat("Saved results to:", outfile, "\n")
+}
+```
+
+### We compile all inference results into a single list object for subsequent analysis
+
+```{r, eval = FALSE}
+files <- list.files("results/seu_NF", pattern = "\\.rda$", full.names = TRUE)
+
+step1_perm_NF <- setNames(
+  lapply(files, load),
+  sub("\\.rda$", "", basename(files))
+)
+
+save(step1_perm_NF, file = "results/seu_NF/step1_perm_NF.rda")
+```
+
+# Compute the MCC for each pairwise comparison of the 12 configurations
+
+Now that we have generated the inference results across all 12 configurations, we can compute the MCC for each pairwise comparison of the configurations. This will allow us to evaluate the agreement between the different methods, mean types and databases, and identify the factors contributing to agreement between CellChat and CellPhoneDB.
+
+```{r, eval = FALSE}
+seuNF_corr_s1 <- compute_corr(step1_perm_NF)
+
+save(seuNF_corr_s1, file = "results/seu_NF/seuNF_corr_s1.rda") 
+```
+
+```{r, echo = FALSE}
+load("results/seu_NF/seuNF_corr_s1.rda") 
+```
+
+```{r}
+seuNF_corr_s1 %>% dim()
+
+seuNF_corr_s1 %>% 
+  head() %>%
+  knitr::kable()
+```
+
+```{r, echo = FALSE}
+# Dummy variable to replicate step1_perm_NF (only object names and length used for heatmap)
+names <- apply(grid, 1, paste, collapse = "_")
+
+step1_perm_NF <- list()
+
+for (n in names){
+  step1_perm_NF[[n]] <- 0
+}
+```
+
+# Visualize the correlation matrix as a heatmap
+
+```{r}
+#| fig-width: 10
+#| fig-height: 8
+#| out-width: 100%
+
+create_heatmap(seuNF_corr_s1, step1_perm_NF, "mcc")
+```
+
+# Multiple linear regression analysis
+
+Here, we perform a multiple linear regression analysis to evaluate the effect size of each factor (method, mean type and database) on the agreement between CellChat and CellPhoneDB, as measured by the MCC. We will fit a linear model with the MCC as the response variable and the method, mean type and database as predictor variables. This will allow us to quantify the contribution of each factor to the agreement between the two tools.
+
+## Create a data frame for regression analysis
+
+We removed the diagonal entries of the correlation matrix, as they correspond to self-self comparisons which is always 1 and does not provide meaningful information for the regression analysis. We also removed the upper triangle of the matrix to avoid duplicate comparisons, as the correlation matrix is symmetric.
+
+We added columns `Method`, `Mean_Type` and `Database` to indicate if the pairwise comparisons were conducted between two configurations with the same method, mean type or database respectively. For example, if the pairwise comparison was conducted between `cellchat_t10_CCDB` and `cellphonedb_t10_CCDB`, the `Method` column would be Diff (different methods), the `Mean_Type` column would be Same (same mean type) and the `Database` column would be Same (same database).
+
+```{r}
+regression_data <- format_data(seuNF_corr_s1)
+
+regression_data %>% head() %>% knitr::kable()
+```
+
+## Fit a linear model
+
+```{r}
+fit <- lm(mcc ~ Method + Mean_Type + Database, data = regression_data)
+
+summary(fit)
+
+broom::tidy(fit) %>% knitr::kable()
+```
+
+# Discussion
+
+The fitted regression model was:
+
+$$
+\begin{aligned}
+MCC =\;& 0.8389\, \\ 
+      & + 0.0180\, I(\text{Method}) \\
+      & - 0.1813\,   I(\text{Mean\_Type}) \\
+      & - 0.5254\,   I(\text{Database})
+\end{aligned}
+$$
+
+where $I = 0$ indicates that the factor was the same between the analyses, and $I = 1$ indicates that the factor differed.
+
+The overall regression was statistically significant, explaining a substantial proportion of the variance in the computed MCC values (R-squared = 0.7371). Under the reference condition, where method, mean type and database were identical, the expected MCC was 0.8389 Holding the other factors constant, MCC increased by 0.0180 when the method differed, decreased by 0.1813 when the mean type differed, and decreased by 0.5254 when the database differed. All predictors displayed a significant decrease (p < 0.05) in the MCC value when the variable differed, with database choice exerting the largest effect, followed by mean type and method. 
+
+These results indicate that across CCC analyses performed using CellChat and CellPhoneDB, most of the variability in agreement is attributed to database choice. In contrast, changes in inference method or mean type used to compute average gene expression per cell type cluster contributed comparatively smaller shifts in MCC when the database used is held constant. Together, these findings suggest that ligand-receptor prior knowledge is the most important factor among the three predictors tested to understand agreement between CellChat and CellPhoneDB inference results.
+

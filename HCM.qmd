@@ -1,0 +1,227 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Cardiomyopathy (Hypertrophic) Case Study
+
+In this chapter, we aim to expand the analysis conducted in the previous chapters by evaluating the agreement between CellChat and CellPhoneDB using a different dataset. We downloaded publicly available snRNA-seq data of cardiomyopathy left ventricular samples from the study by [Chaffin et. al (2022)](https://doi.org/10.1038/s41586-022-04817-8). We converted the data into a Seurat object and performed the same analysis as in the previous chapters.
+
+## Load Data and Packages
+
+```{r}
+pacman::p_load(scpeakeR, ggthemes, randomcoloR, ComplexHeatmap, circlize)
+setwd(this.path::here())
+rm(list = ls())
+
+use_condaenv("scpeaker")
+
+data(step1_map, CellChatDB.human)
+load("data/CellPhoneDB_ori_human.rda")    # CellChat-compatible CellPhoneDB resource in .rda format
+load("data/20260326_seuHCM.rda")
+```
+
+## Load required functions
+
+```{r}
+source("R/deploy.R")
+```
+
+## Create result directory if it doesn't exist
+
+```{r, eval = FALSE}
+sapply("results/seu_HCM", dir.create, recursive = TRUE)
+```
+
+## seu.HCM data summary
+
+`seu.HCM` is a Seurat object containing snRNA-seq data from left ventricular samples of patients with hypertrophic cardiomyopathy. It has 36,601 genes across 235,252 cells. You may find the processing of the data in the previous chapter.
+
+```{r, echo = FALSE}
+load("data/20260326_seuHCM.rda")
+```
+
+```{r}
+seu.HCM
+```
+
+### seu.HCM metadata
+
+```{r}
+seu.HCM@meta.data %>% head()
+```
+
+### seu.HCM cell type clusters
+
+```{r}
+seu.HCM@meta.data %>% tabyl(cell_type_leiden0.6)
+```
+
+# Conduct CellChat and CellPhoneDB analysis across all configurations
+
+## Create table of all configurations to test
+
+```{r}
+grid <- expand.grid(method   = c("cellphonedb", "cellchat"),
+                    mean     = c("t10", "t25", "triMean"),
+                    database = c("CPDB", "CCDB"))
+
+grid %>% knitr::kable()
+```
+
+## Parse mean type and threshold from grid
+
+```{r}
+parse_mean <- function(x){
+  if (x == "t10") {
+    list(type = "thresholdedMean", threshold = 0.1)
+  } else if (x == "t25"){
+    list(type = "thresholdedMean", threshold = 0.25)
+  } else if (x == "triMean"){
+    list(type = "triMean", threshold = 0)
+  }
+}
+```
+
+## Run analysis across all configurations
+
+Due to the large size of the dataset compared to the atopic dermatitis data used in the previous chapters, we will run the analysis across all configurations in parallel on a high-performance computing cluster. The code chunk below is an example of how to run the analysis for each configuration sequentially, but in practice, we would submit each configuration as a separate job to the cluster to speed up the analysis.
+
+```{r, eval = FALSE}
+# Run analysis across all configurations
+for (i in seq_len(nrow(grid))){
+  row      <- grid[i, ]
+  parsed   <- parse_mean(row["mean"])
+  
+  cat("Running analysis with method:", row$method, "\n",
+      "mean:", parsed$type, "\n",
+      "threshold:", parsed$threshold, "\n",
+      "database:", row$database, "\n")
+  
+  # Create output file
+  name    <- paste(c(row$method, row$mean, row$database), collapse = "_")
+  outfile <- file.path(outdir, paste0(name, ".rda"))
+  
+  if (row$method == "cellchat") {
+    res <- run_cellchatv2(seu.HCM, 
+                   labels = "cell_type_leiden0.6", 
+                   mean = parsed$type, 
+                   database = row$database, 
+                   threshold = parsed$threshold)
+  } else if(row$method == "cellphonedb") {
+    res <- run_cellphonedbv2(seu.HCM, 
+                      labels = "cell_type_leiden0.6", 
+                      mean = parsed$type, 
+                      database = row$database, 
+                      threshold = parsed$threshold)
+  }
+  
+  save(res, file = outfile)
+  
+  rm(res)
+  
+  cat("Saved results to:", outfile, "\n")
+}
+```
+
+### We compile all iHCMerence results into a single list object for subsequent analysis
+
+```{r, eval = FALSE}
+files <- list.files("results/seu_HCM", pattern = "\\.rda$", full.names = TRUE)
+
+step1_perm_HCM <- setNames(
+  lapply(files, load),
+  sub("\\.rda$", "", basename(files))
+)
+
+save(step1_perm_HCM, file = "results/seu_HCM/step1_perm_HCM.rda")
+```
+
+# Compute the MCC for each pairwise comparison of the 12 configurations
+
+Now that we have generated the iHCMerence results across all 12 configurations, we can compute the MCC for each pairwise comparison of the coHCMigurations. This will allow us to evaluate the agreement between the different methods, mean types and databases, and identify the factors contributing to agreement between CellChat and CellPhoneDB.
+
+```{r, eval = FALSE}
+seuHCM_corr_s1 <- compute_corr(step1_perm_HCM)
+
+save(seuHCM_corr_s1, file = "results/seu_HCM/seuHCM_corr_s1.rda") 
+```
+
+```{r, echo = FALSE}
+load("results/seu_HCM/seuHCM_corr_s1.rda") 
+```
+
+```{r}
+seuHCM_corr_s1 %>% dim()
+
+seuHCM_corr_s1 %>% 
+  head() %>%
+  knitr::kable()
+```
+
+```{r, echo = FALSE}
+# Dummy variable to replicate step1_perm_HCM (only object names and length used for heatmap)
+names <- apply(grid, 1, paste, collapse = "_")
+
+step1_perm_HCM <- list()
+
+for (n in names){
+  step1_perm_HCM[[n]] <- 0
+}
+```
+
+# Visualize the correlation matrix as a heatmap
+
+```{r}
+#| fig-width: 10
+#| fig-height: 8
+#| out-width: 100%
+
+create_heatmap(seuHCM_corr_s1, step1_perm_HCM, "mcc")
+```
+
+# Multiple linear regression analysis
+
+Here, we perform a multiple linear regression analysis to evaluate the effect size of each factor (method, mean type and database) on the agreement between CellChat and CellPhoneDB, as measured by the MCC. We will fit a linear model with the MCC as the response variable and the method, mean type and database as predictor variables. This will allow us to quantify the contribution of each factor to the agreement between the two tools.
+
+## Create a data frame for regression analysis
+
+We removed the diagonal entries of the correlation matrix, as they correspond to self-self comparisons which is always 1 and does not provide meaningful iHCMormation for the regression analysis. We also removed the upper triangle of the matrix to avoid duplicate comparisons, as the correlation matrix is symmetric.
+
+We added columns `Method`, `Mean_Type` and `Database` to indicate if the pairwise comparisons were conducted between two coHCMigurations with the same method, mean type or database respectively. For example, if the pairwise comparison was conducted between `cellchat_t10_CCDB` and `cellphonedb_t10_CCDB`, the `Method` column would be Diff (different methods), the `Mean_Type` column would be Same (same mean type) and the `Database` column would be Same (same database).
+
+```{r}
+regression_data <- format_data(seuHCM_corr_s1)
+
+regression_data %>% head() %>% knitr::kable()
+```
+
+## Fit a linear model
+
+```{r}
+fit <- lm(mcc ~ Method + Mean_Type + Database, data = regression_data)
+
+summary(fit)
+
+broom::tidy(fit) %>% knitr::kable()
+```
+
+# Discussion
+
+The fitted regression model was:
+
+$$
+\begin{aligned}
+MCC =\;& 0.8320\, \\ 
+      & + 0.0202\, I(\text{Method}) \\
+      & - 0.2093\,   I(\text{Mean\_Type}) \\
+      & - 0.4443\,   I(\text{Database})
+\end{aligned}
+$$
+
+where $I = 0$ indicates that the factor was the same between the analyses, and $I = 1$ indicates that the factor differed.
+
+The overall regression was statistically significant, explaining a substantial proportion of the variance in the computed MCC values (R-squared = 0.6148). Under the reference condition, where method, mean type and database were identical, the expected MCC was 0.8320 Holding the other factors constant, MCC increased by 0.0202 when the method differed, decreased by 0.2093 when the mean type differed, and decreased by 0.4443 when the database differed. All predictors displayed a significant decrease (p \< 0.05) in the MCC value when the variable differed, with database choice exerting the largest effect, followed by mean type and method.
+
+These results indicate that across CCC analyses performed using CellChat and CellPhoneDB, most of the variability in agreement is attributed to database choice. In contrast, changes in inference method or mean type used to compute average gene expression per cell type cluster contributed comparatively smaller shifts in MCC when the database used is held constant. Together, these findings suggest that ligand-receptor prior knowledge is the most important factor among the three predictors tested to understand agreement between CellChat and CellPhoneDB inference results.

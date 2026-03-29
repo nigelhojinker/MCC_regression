@@ -12,6 +12,8 @@ book:
     - index.qmd
     - NL.qmd
     - LS.qmd
+    - NF.qmd
+    - HCM.qmd
     - references.qmd
 
 bibliography: references.bib

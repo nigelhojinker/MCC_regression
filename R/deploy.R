@@ -1,8 +1,8 @@
 ###########################################
 #### CellChat and CellPhoneDB analysis ####
 ###########################################
-run_cellchatv2 <- function(obj, mean, database, threshold){
-  cellchat    <- createCellChat(object = obj, group.by = "labels")
+run_cellchatv2 <- function(obj, labels, mean, database, threshold){
+  cellchat    <- createCellChat(object = obj, group.by = labels)
 
   # Use ORIGINAL databases
   if (database == "CCDB") {
@@ -20,7 +20,7 @@ run_cellchatv2 <- function(obj, mean, database, threshold){
   return(cellchat)
 }
 
-run_cellphonedbv2 <- function(obj, mean, database, threshold) {
+run_cellphonedbv2 <- function(obj, labels, mean, database, threshold) {
   name <- deparse(substitute(obj))
   ad <- import("anndata")
   cpdb.analysis <- import("cellphonedb.src.core.methods.cpdb_statistical_analysis_method")
