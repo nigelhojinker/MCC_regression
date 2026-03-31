@@ -3,7 +3,8 @@ output: html_document
 editor_options: 
   chunk_output_type: console
 ---
-# Cardiomyopathy (Non-failing heart) Case Study 
+
+# Cardiomyopathy (Non-failing heart) Case Study
 
 In this chapter, we aim to expand the analysis conducted in the previous chapters by evaluating the agreement between CellChat and CellPhoneDB using a different dataset. We downloaded publicly available snRNA-seq data of cardiomyopathy left ventricular samples from the study by [Chaffin et. al (2022)](https://doi.org/10.1038/s41586-022-04817-8). We converted the data into a Seurat object and performed the same analysis as in the previous chapters.
 
@@ -28,13 +29,14 @@ source("R/deploy.R")
 ```
 
 ## Create result directory if it doesn't exist
+
 ```{r, eval = FALSE}
 sapply("results/seu_NF", dir.create, recursive = TRUE)
 ```
 
 ## Data download and conversion to Seurat object
 
-The original data was downloaded from Single Cell Portal and can be found [here](https://singlecell.broadinstitute.org/single_cell/study/SCP1303/single-nuclei-profiling-of-human-dilated-and-hypertrophic-cardiomyopathy#study-download). 
+The original data was downloaded from Single Cell Portal and can be found [here](https://singlecell.broadinstitute.org/single_cell/study/SCP1303/single-nuclei-profiling-of-human-dilated-and-hypertrophic-cardiomyopathy#study-download).
 
 ### Create Seurat object
 
@@ -139,7 +141,7 @@ save(seu.HCM, file = "data/20260326_seuHCM.rda")
 
 ## seu.NF data summary
 
-`seu.NF` is a Seurat object containing 36,601 genes across 185,441  cells. 
+`seu.NF` is a Seurat object containing 36,601 genes across 185,441 cells.
 
 ```{r, echo = FALSE}
 load("data/20260326_seuNF.rda")
@@ -325,7 +327,6 @@ $$
 
 where $I = 0$ indicates that the factor was the same between the analyses, and $I = 1$ indicates that the factor differed.
 
-The overall regression was statistically significant, explaining a substantial proportion of the variance in the computed MCC values (R-squared = 0.7371). Under the reference condition, where method, mean type and database were identical, the expected MCC was 0.8389 Holding the other factors constant, MCC increased by 0.0180 when the method differed, decreased by 0.1813 when the mean type differed, and decreased by 0.5254 when the database differed. All predictors displayed a significant decrease (p < 0.05) in the MCC value when the variable differed, with database choice exerting the largest effect, followed by mean type and method. 
+The overall regression was statistically significant, explaining a substantial proportion of the variance in the computed MCC values (R-squared = 0.7371). Under the reference condition, where method, mean type and database were identical, the expected MCC was 0.8389 Holding the other factors constant, MCC increased by 0.0180 when the method differed, decreased by 0.1813 when the mean type differed, and decreased by 0.5254 when the database differed. All predictors displayed a significant decrease (p \< 0.05) in the MCC value when the variable differed, with database choice exerting the largest effect, followed by mean type and method.
 
 These results indicate that across CCC analyses performed using CellChat and CellPhoneDB, most of the variability in agreement is attributed to database choice. In contrast, changes in inference method or mean type used to compute average gene expression per cell type cluster contributed comparatively smaller shifts in MCC when the database used is held constant. Together, these findings suggest that ligand-receptor prior knowledge is the most important factor among the three predictors tested to understand agreement between CellChat and CellPhoneDB inference results.
-

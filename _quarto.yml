@@ -14,7 +14,7 @@ book:
     - LS.qmd
     - NF.qmd
     - HCM.qmd
-    - references.qmd
+    - summary.qmd
 
 bibliography: references.bib
 
